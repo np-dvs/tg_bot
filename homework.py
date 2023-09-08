@@ -74,8 +74,7 @@ def check_response(response):
     Ключи - homeworks, current_date.
     Тип значения ключа homeworks - list.
     """
-
-# Павел, помогите, пожалуйста - 
+# Павел, помогите, пожалуйста -
 # если я пишу конструкцию try-except такого плана
 # я просто искусственно создаю TypeError, который
 # попадёт в блок except
@@ -85,7 +84,7 @@ def check_response(response):
     #     data = response['homeworks']
     # except TypeError as type:
     #     logging.error(f'Неверный тип данных - {type}')
-    # except KeyError as key:
+    # except KeyError as key:gi
     #     logging.error(f'Не найден ключ {key}')
     # return data
 
@@ -102,6 +101,8 @@ def check_response(response):
                       f'Был получен {type(response.get("homeworks"))}.'
                       f'Ожидался - {list}')
         raise TypeError
+# в такой вариации всё работает (проходит тесты)
+# но это явно не правильно
     return response['homeworks']
 
 
