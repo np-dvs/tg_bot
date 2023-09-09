@@ -24,6 +24,7 @@ TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 RETRY_PERIOD = 600
+LAST_HW_DATE = 20 * 24 * 60 * 60
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
@@ -41,13 +42,8 @@ def check_tokens():
     Если отсутствует хотя бы одна переменная окружения
     продолжать работу бота нет смысла.
     """
-    values = [PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]
-    for value in values:
-        if value:
-            return True
-        else:
-            logging.critical('Отсутствует токен')
-            raise ValueError
+    if all([PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]):
+        return True
 
 
 def get_api_answer(timestamp):
@@ -74,49 +70,33 @@ def check_response(response):
     Ключи - homeworks, current_date.
     Тип значения ключа homeworks - list.
     """
-# Павел, помогите, пожалуйста -
-# если я пишу конструкцию try-except такого плана
-# я просто искусственно создаю TypeError, который
-# попадёт в блок except
-    # try:
-    #     homework = response['homeworks']
-    #     list = response['homeworks'][0]
-    #     data = response['homeworks']
-    # except TypeError as type:
-    #     logging.error(f'Неверный тип данных - {type}')
-    # except KeyError as key:gi
-    #     logging.error(f'Не найден ключ {key}')
-    # return data
-
     if not isinstance(response, dict):
-        logging.error(f'Неверный тип данных.'
-                      f'Был получен {type(response)}.'
-                      f'Ожидался - {dict}')
-        raise TypeError
+        raise TypeError(f'Неверный тип данных - {type(response)}.'
+                        f'Ожидался - {dict}')
     if 'homeworks' not in response:
-        logging.error('Ключ "homeworks" отсутствует в словаре')
-        raise KeyError
+        raise KeyError('Ключ "homeworks" отсутствует в словаре')
     if not isinstance(response.get('homeworks'), list):
-        logging.error(f'Неверный тип данных.'
-                      f'Был получен {type(response.get("homeworks"))}.'
-                      f'Ожидался - {list}')
-        raise TypeError
-# в такой вариации всё работает (проходит тесты)
-# но это явно не правильно
+        raise TypeError(f'Неверный тип данных -'
+                        f'{type(response.get("homeworks"))}.'
+                        f'Ожидался - {list}')
     return response['homeworks']
 
 
 def parse_status(homework):
     """Проверяет статус домашней работы."""
-    # if type(homework) is not dict:
-    #     raise KeyError
-    try:
-        homework_name = homework['homework_name']
-        homework_status = homework['status']
-        verdict = HOMEWORK_VERDICTS[homework_status]
-    except KeyError as key:
-        logging.error(f'Ключ {key} не найден в словаре')
-        raise KeyError
+    if not isinstance(homework, dict):
+        raise TypeError(f'Неверный тип данных - {type(homework)}.'
+                        f'Ожидаемый тип данных - {dict}.')
+    keys = ['homework_name', 'status']
+    for key in keys:
+        if key not in homework:
+            raise KeyError(f'Ключ {key} не найден в словаре.')
+    if homework['status'] not in HOMEWORK_VERDICTS:
+        raise KeyError(f'Ключ {key} не найден в словаре')
+    else:
+        homework_name = homework.get('homework_name')
+        homework_status = homework.get('status')
+        verdict = HOMEWORK_VERDICTS.get(homework_status)
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
@@ -135,10 +115,13 @@ def main():
     last_status = []
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
-    check_tokens()
+    if not check_tokens():
+        logging.critical('Отсутствует переменная окружения.'
+                         'Программа принудительно остановлена.')
+        exit()
     while True:
         try:
-            response = get_api_answer(timestamp - 20 * 24 * 60 * 60)
+            response = get_api_answer(timestamp - LAST_HW_DATE)
             homeworks = check_response(response)
             for homework in homeworks:
                 message = parse_status(homework)
@@ -152,7 +135,7 @@ def main():
             message = f'Сбой в работе программы: {error}'
             send_message(bot, message)
 
-        time.sleep(600)
+        time.sleep(RETRY_PERIOD)
 
 
 if __name__ == '__main__':
