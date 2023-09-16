@@ -7,9 +7,9 @@ from http import HTTPStatus
 import requests
 import telegram
 import telegram.ext
-from dotenv import load_dotenv
+from dotenv import load_dotenv, dotenv_values
 
-from exceptions import HTTPRequestError
+from exceptions import ResponseError, RequestExcept
 
 load_dotenv()
 
@@ -22,6 +22,8 @@ logger.addHandler(handler)
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
+
+TOKEN_LIST = [PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]
 
 RETRY_PERIOD = 600
 LAST_HW_DATE = 20 * 24 * 60 * 60
@@ -36,35 +38,35 @@ HOMEWORK_VERDICTS = {
 }
 
 
-def check_tokens():
+def check_tokens() -> bool:
     """
     Проверяет доступность переменных окружения.
     Если отсутствует хотя бы одна переменная окружения
     продолжать работу бота нет смысла.
     """
-    if all([PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]):
-        return True
+    if not all(TOKEN_LIST):
+        logging.critical('Отсутствуют обязательные переменные окружения')
+        sys.exit()
+    return True
 
-
-def get_api_answer(timestamp):
+def get_api_answer(timestamp: int) -> dict[str]:
     """
     Делает запрос к единственному эндпоинту API-сервиса.
     В качестве параметра в функцию передается временная метка
     """
-    payload = {'from_date': timestamp}
+    request_params = {'url': ENDPOINT,
+                      'headers': HEADERS,
+                      'params': {'from_date': timestamp}}
     try:
-        server_response = requests.get(ENDPOINT,
-                                       headers=HEADERS,
-                                       params=payload)
+        server_response = requests.get(**request_params)
         if server_response.status_code != HTTPStatus.OK:
-            logging.error(f'Код ответа {server_response.status_code}')
-            raise HTTPRequestError
+            raise ResponseError
     except requests.RequestException:
-        logging.error('Не удалось получить ответ API')
+        raise RequestExcept
     return server_response.json()
 
 
-def check_response(response):
+def check_response(response: dict[str]) -> list:
     """
     Проверяет ответ - тип dict.
     Ключи - homeworks, current_date.
@@ -82,7 +84,7 @@ def check_response(response):
     return response['homeworks']
 
 
-def parse_status(homework):
+def parse_status(homework: dict) -> str:
     """Проверяет статус домашней работы."""
     if not isinstance(homework, dict):
         raise TypeError(f'Неверный тип данных - {type(homework)}.'
@@ -100,13 +102,14 @@ def parse_status(homework):
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
-def send_message(bot, message):
+def send_message(bot: telegram.Bot, message: str) -> None:
     """Отправляет обновление домашки в чат."""
     try:
-        logging.debug('Cообщение отправлено')
         bot.send_message(TELEGRAM_CHAT_ID, message)
-    except Exception:
-        logging.error('Не удалось отправить сообщение')
+    except Exception as error:
+        logging.error(f'Не удалось отправить сообщение - ошибка {error}')
+    else:
+        logging.debug('Cообщение отправлено')
 
 
 def main():
@@ -115,10 +118,7 @@ def main():
     last_status = []
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
-    if not check_tokens():
-        logging.critical('Отсутствует переменная окружения.'
-                         'Программа принудительно остановлена.')
-        exit()
+    check_tokens()
     while True:
         try:
             response = get_api_answer(timestamp - LAST_HW_DATE)
@@ -133,10 +133,16 @@ def main():
                     logging.debug('Статус не обновлялся')
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
+            logging.error(message)
             send_message(bot, message)
 
         time.sleep(RETRY_PERIOD)
 
 
 if __name__ == '__main__':
+    # if check_tokens():
     main()
+    # else:
+    #     logging.critical('Отсутствует переменная окружения.'
+    #                      'Программа принудительно остановлена')
+    #     sys.exit()
