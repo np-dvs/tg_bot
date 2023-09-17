@@ -7,7 +7,7 @@ from http import HTTPStatus
 import requests
 import telegram
 import telegram.ext
-from dotenv import load_dotenv, dotenv_values
+from dotenv import load_dotenv
 
 from exceptions import ResponseError, RequestExcept
 
@@ -23,7 +23,6 @@ PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
-TOKEN_LIST = [PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]
 
 RETRY_PERIOD = 600
 LAST_HW_DATE = 20 * 24 * 60 * 60
@@ -44,10 +43,12 @@ def check_tokens() -> bool:
     Если отсутствует хотя бы одна переменная окружения
     продолжать работу бота нет смысла.
     """
-    if not all(TOKEN_LIST):
+    tokens = [PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]
+    if not all(tokens):
         logging.critical('Отсутствуют обязательные переменные окружения')
         sys.exit()
     return True
+
 
 def get_api_answer(timestamp: int) -> dict[str]:
     """
@@ -62,7 +63,7 @@ def get_api_answer(timestamp: int) -> dict[str]:
         if server_response.status_code != HTTPStatus.OK:
             raise ResponseError
     except requests.RequestException:
-        raise RequestExcept
+        raise RequestExcept(server_response)
     return server_response.json()
 
 
@@ -140,9 +141,4 @@ def main():
 
 
 if __name__ == '__main__':
-    # if check_tokens():
     main()
-    # else:
-    #     logging.critical('Отсутствует переменная окружения.'
-    #                      'Программа принудительно остановлена')
-    #     sys.exit()
