@@ -44,10 +44,8 @@ def check_tokens() -> bool:
     продолжать работу бота нет смысла.
     """
     tokens = [PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]
-    if not all(tokens):
-        logging.critical('Отсутствуют обязательные переменные окружения')
-        sys.exit()
-    return True
+    if all(tokens):
+        return True
 
 
 def get_api_answer(timestamp: int) -> dict[str]:
@@ -55,15 +53,22 @@ def get_api_answer(timestamp: int) -> dict[str]:
     Делает запрос к единственному эндпоинту API-сервиса.
     В качестве параметра в функцию передается временная метка
     """
-    request_params = {'url': ENDPOINT,
-                      'headers': HEADERS,
-                      'params': {'from_date': timestamp}}
+    request = {'url': ENDPOINT,
+               'headers': HEADERS,
+               'params': {'from_date': timestamp}}
     try:
-        server_response = requests.get(**request_params)
+        server_response = requests.get(**request)
         if server_response.status_code != HTTPStatus.OK:
-            raise ResponseError
-    except requests.RequestException:
-        raise RequestExcept(server_response)
+            raise ResponseError(f'Запрос к {request["url"]},'
+                                f'headers - {request["headers"]},'
+                                f'params - {request["params"]} не выполнен.'
+                                f'Ожидаемый код ответа сервера -'
+                                f'{HTTPStatus.OK}. Получен - '
+                                f'{server_response.status_code}.')
+    except requests.RequestException as error:
+        raise RequestExcept(f'Возникла ошибка {error}.'
+                            f'Подключение к {request["url"]} невозможно.'
+                            f'Проверьте параметры запроса - {request}')
     return server_response.json()
 
 
@@ -119,7 +124,9 @@ def main():
     last_status = []
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
-    check_tokens()
+    if not check_tokens():
+        logging.critical('Отсутствуют обязательные переменные окружения')
+        sys.exit()
     while True:
         try:
             response = get_api_answer(timestamp - LAST_HW_DATE)

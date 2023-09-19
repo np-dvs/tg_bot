@@ -1,5 +1,4 @@
 from http import HTTPStatus
-import requests
 
 
 class ResponseError(Exception):
@@ -13,7 +12,7 @@ class ResponseError(Exception):
         super().__init__(message)
 
 
-class RequestExcept(requests.RequestException):
+class RequestExcept(Exception):
     def __init__(self, response):
         message = (f'При обработке запроса {response}'
                    f'Возникло исключение.')
